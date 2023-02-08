@@ -10,13 +10,23 @@ I've augmented each layer's description with a simple code example. I've used [R
 
 ![Onion Architecture](./docs/onion.svg)
 
-The _core_ is pure in the functional sense, i.e. it has no side-effects. This is where our business logic resides. It is exceptionally easy to test because its pure functions only take and return values. In our example, our _core_ is just a single function that takes 2 integers and adds them together. In the _core_, we don't think about IO at all.
+The _core_ is pure in the functional sense, i.e. it has no side-effects. This is where our business logic resides. Notice how easy it is to test because its pure functions only take and return values. In our example, our _core_ is just a single function that takes 2 integers and adds them together. In the _core_, we don't think about IO at all.
 
 ```rust
 /// 1. Pure. Don't think about IO at all
 mod core {
     pub fn add(x: i32, y: i32) -> i32 {
         x + y
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn adds() {
+            let actual = super::add(1, 2);
+            let expected = 3;
+            assert_eq!(actual, expected);
+        }
     }
 }
 ```
@@ -34,12 +44,16 @@ mod domain {
     use anyhow::Result;
     use std::future::Future;
 
-    pub async fn add<Fut>(get_x: impl Fn() -> Fut, y: i32) -> Result<i32>
+    pub async fn add<F, Fut>(get_x: F, y: i32) -> Result<i32>
     where
+        F: Fn() -> Fut,
         Fut: Future<Output = Result<i32>>,
     {
         let x = get_x().await?;
-        Ok(core::add(x, y))
+
+        let result = core::add(x, y);
+
+        Ok(result)
     }
 }
 ```
@@ -54,7 +68,7 @@ mod infra {
     use anyhow::Result;
 
     pub async fn get_x() -> Result<i32> {
-        // call DB, which returns 7
+        // call DB, which returns 7, then..
         Ok(7)
     }
 }
@@ -70,6 +84,7 @@ mod api {
 
     pub async fn add(y: i32) -> Result<i32> {
         let result = domain::add(infra::get_x, y).await?;
+
         Ok(result)
     }
 }
@@ -78,13 +93,10 @@ mod api {
 We'll need an entry-point for our service:
 
 ```rust
-fn main() {
-    async_std::task::block_on(async {
-        println!(
-            "When we add 3 to the DB value (7), we get {:?}",
-            api::add(3).await
-        );
-    })
+#[async_std::main]
+async fn main() {
+    let result = api::add(3).await;
+    println!("When we add 3 to the DB value (7), we get {result:?}");
 }
 ```
 

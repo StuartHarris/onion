@@ -39,7 +39,7 @@ mod infra {
     use anyhow::Result;
 
     pub async fn get_x() -> Result<i32> {
-        // call DB, then..
+        // call DB, which returns 7, then..
         Ok(7)
     }
 }
